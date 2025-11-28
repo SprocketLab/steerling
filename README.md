@@ -2,7 +2,7 @@
 
 Repository for post-block low rank steerin described in https://sprocketlab.github.io/posts/2025/11/actvweight/
 
-![actvweight logo](images/actvweight_logo.png)
+<img src="images/actvweight_logo.png" alt="actvweight logo" width="300" />
 
 ## Environment Setup
 
