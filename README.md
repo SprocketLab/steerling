@@ -1,6 +1,6 @@
 # steerling
 
-Repository for post-block low rank steerin described in https://sprocketlab.github.io/posts/2025/11/actvweight/
+Repository for post-block low rank steering described in https://sprocketlab.github.io/posts/2025/11/actvweight/
 
 <img src="images/actvweight_logo.png" alt="actvweight logo" width="500" />
 
