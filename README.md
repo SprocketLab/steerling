@@ -33,8 +33,8 @@ python train.py \
 
 Defaults match the method in the blog (adapters applied to all tokens). If you want, you can experiment variants with:
 
-- `--no-adapter` – use fixed steering vectors (fewer trainable params, less expressive, slower training because we optimize only the last token).
-- `--intervene-last` – restrict steering to the final token; incurs an extra forward pass per generation step.
+- `--no-adapter` – use fixed steering vectors (fewer trainable params, less expressive).
+- `--intervene-last` – restrict steering to the final token *at every generation step*; incurs an extra forward pass per generation step.
 - `--submodules` – inject adapters into attention/MLP submodules rather than the entire block.
 
 Performance under these alternate configurations is not guaranteed.

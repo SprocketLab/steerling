@@ -2,3 +2,5 @@ wandb/
 __pycache__/
 utils/__pycache__/
 *.pt
+*.bin
+*.json
