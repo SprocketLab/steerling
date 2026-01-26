@@ -1,9 +1,3 @@
-# steerling
-
-Repository for post-block low rank steering described in https://sprocketlab.github.io/posts/2025/11/actvweight/
-
-<img src="images/actvweight_logo.png" alt="actvweight logo" width="500" />
-
 ## Environment Setup
 
 The repo ships with `setup_env.sh`, which provisions a Conda environment named `steerling` (Python 3.10) and installs all runtime dependencies.
