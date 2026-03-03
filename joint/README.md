@@ -15,7 +15,7 @@ python train_orthogonal.py \
 | Argument | Default | Description |
 |----------|---------|-------------|
 | `--model-name` | *(required)* | HuggingFace model ID (e.g. `meta-llama/Meta-Llama-3-8B`) |
-| `--dataset-name` | *(required)* | One of: `ASDiv`, `BoolQ`, `Winogrande`, `ListOps`, `GSM8K`, `MNLI`, `SVAMP` |
+| `--dataset-name` | *(required)* | One of: `BoolQ`, `Winogrande`, `ListOps`, `GSM8K`, `ARC_Challenge`, `AQuA` |
 | `--lr` | `2e-4` | Base learning rate |
 | `--lora-lr` | same as `--lr` | Learning rate override for LoRA parameters |
 | `--adapter-lr` | same as `--lr` | Learning rate override for adapter parameters |

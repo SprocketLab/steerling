@@ -44,7 +44,7 @@ Performance under these alternate configurations is not guaranteed.
 | Argument | Default | Description |
 |----------|---------|-------------|
 | `--model-name` | *(required)* | HuggingFace model ID (e.g. `meta-llama/Meta-Llama-3-8B`) |
-| `--dataset-name` | *(required)* | One of: `ASDiv`, `BoolQ`, `Winogrande`, `ListOps`, `GSM8K`, `MNLI`, `SVAMP` |
+| `--dataset-name` | *(required)* | One of: `BoolQ`, `Winogrande`, `ListOps`, `GSM8K`, `ARC_Challenge`, `AQuA` |
 | `--lr` | `9e-4` | Learning rate |
 | `--warmup-ratio` | `0.03` | Fraction of steps used for LR warm-up |
 | `--weight-decay` | `0.0` | Weight decay |
