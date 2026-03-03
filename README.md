@@ -59,29 +59,6 @@ Performance under these alternate configurations is not guaranteed.
 | `--do-eval` | off | Run evaluation immediately after training instead of saving the model |
 | `--test-only` | off | Skip validation, evaluate on test set only (requires `--do-eval`) |
 
-### Example variants
-
-```bash
-# Fixed steering vectors instead of adapters
-python train.py \
-  --model-name meta-llama/Meta-Llama-3-8B \
-  --dataset-name BoolQ \
-  --no-adapter
-
-# Submodule-level adapters (attn + MLP separately)
-python train.py \
-  --model-name meta-llama/Meta-Llama-3-8B \
-  --dataset-name GSM8K \
-  --submodules
-
-# Steer only last token, evaluate immediately after training
-python train.py \
-  --model-name meta-llama/Meta-Llama-3-8B \
-  --dataset-name ListOps \
-  --intervene-last \
-  --do-eval
-```
-
 ## Outputs
 
 | Path | Contents |
