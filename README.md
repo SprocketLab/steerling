@@ -1,8 +1,8 @@
 # steerling
 
-Repository for post-block low rank steering described in https://arxiv.org/abs/2603.00425 
+Official repository for *Post-Block Low-Rank Steering*, as described in our [paper](https://arxiv.org/abs/2603.00425).
 
-(Old version) blogpost: https://sprocketlab.github.io/posts/2025/11/actvweight/
+For a high-level overview, see our [blog post](https://sprocketlab.github.io/posts/2025/11/actvweight/) (based on an earlier version of this work).
 
 <img src="images/actvweight_logo.png" alt="actvweight logo" width="500" />
 
