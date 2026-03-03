@@ -879,7 +879,7 @@ class Winogrande(BaseDatasetLoader):
 class GSM8K(BaseDatasetLoader):
     def __init__(self, mode="eval"):
         super().__init__(mode)
-        ds = load_dataset("gsm8k", "main")
+        ds = load_dataset("openai/gsm8k", "main")
         tmp = ds["test"].shuffle(seed=42).train_test_split(test_size=0.20, seed=42) # 80 train, 20 test+val
         self.raw_dict = {
             "train": ds["train"],
@@ -1207,3 +1207,295 @@ class SVAMP(BaseDatasetLoader):
                 return False
 
         return False
+
+
+class MAWPS(BaseDatasetLoader):
+    def __init__(self, mode="eval"):
+        super().__init__(mode)
+        ds = load_dataset("garrethlee/MAWPS")
+        tmp = ds["train"].shuffle(seed=42).train_test_split(test_size=0.10, seed=42) # 80 train, 20 test+val
+        self.raw_dict = {
+            "train": tmp["train"],
+            "validation": tmp["test"],
+            "test": ds["test"],
+        }
+    
+    def build_prompt(self, ex):
+        MAWPS_PROMPT_TMPL = (
+            "Question: {question}\n"
+        )
+        return MAWPS_PROMPT_TMPL.format(
+            question=ex['question']
+        )
+    
+    def get_answer_string(self, ex):
+        answer = ex["answer"]
+        reasoning = answer.split("####")[0].strip().rstrip()
+        answer_str = answer.split("####")[-1].strip().rstrip()
+        return f"{reasoning} Answer: {answer_str}"
+
+    def load_tokenized_dataset(self, tokenizer, max_len=256, return_test=False):
+        def build_tokenized_features(ex):
+            prompt = self.build_prompt(ex)
+            completion = self.get_answer_string(ex) 
+            return self._tokenize_prompt_completion(tokenizer, prompt, completion, max_len)
+        return self._map_tokenized_splits(build_tokenized_features, return_test)
+    
+    def load_raw_dataset(self, return_test=False):
+        def build_raw_features(ex):
+            prompt = self.build_prompt(ex)
+            completion = self.get_answer_string(ex)
+            answer_value = float(ex["answer"].split("####")[-1].strip().rstrip())
+            return self._build_raw_example(prompt, completion, float(answer_value))
+        
+        return self._map_raw_splits(build_raw_features, return_test)
+    
+    def load_raw_dataset_chat(self, tokenizer, return_test=False):
+        def build_raw_features(ex):
+            prompt  = self.build_prompt(ex)
+            completion = self.get_answer_string(ex)
+
+            # Base conversation (system + user)
+            base_msgs = [
+                {"role": "system", "content": [{"type": "text", "text": "You are a helpful assistant."}]},
+                {"role": "user",   "content": [{"type": "text", "text": prompt}]},
+            ]
+
+            # Render only the prefix (system+user) and add a model turn prompt
+            prefix = tokenizer.apply_chat_template(
+                base_msgs, tokenize=False, add_generation_prompt=True
+            )
+            answer_value = ex["answer"].split("####")[-1].strip().rstrip()
+            # Completion is the assistant response we want to learn
+            return [prefix, completion, float(answer_value)]
+
+        return self._map_raw_chat_splits(build_raw_features, return_test) 
+
+    def load_tokenized_dataset_chat(self, tokenizer, max_len=256, return_test=False):
+        def build_tokenized_features(ex):
+            prompt  = self.build_prompt(ex)
+            completion = self.get_answer_string(ex)
+
+            # Common messages (no assistant content)
+            base_msgs = [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user",   "content": prompt},
+            ]
+
+            return self._tokenize_chat_completion(tokenizer, base_msgs, completion, max_len)
+
+        return self._map_tokenized_splits(build_tokenized_features, return_test)
+
+    def evaluate(self, output: str, label: float) -> bool:
+        _num_pat = re.compile(r'[-+]?\d{1,3}(?:,\d{3})*(?:\.\d+)?|[-+]?\d+(?:\.\d+)?')
+        if not output:
+            return False
+
+        s = output.strip()
+
+        # Try to extract from "Answer: ..."
+        m = list(re.finditer(r"(?i)answer\s*:\s*(.+)", s))
+        if m:
+            ans_raw = m[-1].group(1).strip()
+            mnum = _num_pat.search(ans_raw)
+            if mnum:
+                try:
+                    pred = float(mnum.group(0).replace(",", ""))
+                    return abs(pred - float(label)) < 1e-4
+                except:
+                    pass
+
+        # Fallback: last number in entire output
+        nums = list(_num_pat.finditer(s))
+        if nums:
+            try:
+                pred = float(nums[-1].group(0).replace(",", ""))
+                return abs(pred - float(label)) < 1e-4
+            except:
+                return False
+
+        return False
+
+class ARC_Challenge(BaseDatasetLoader):
+    def __init__(self, mode="eval"):
+        super().__init__(mode)
+        ds = load_dataset("allenai/ai2_arc", "ARC-Challenge")
+        tmp = ds["validation"].shuffle(seed=42).train_test_split(test_size=0.50, seed=42)
+        self.raw_dict = {
+            "train": ds["train"],
+            "validation": tmp["train"],
+            "test": tmp["test"],
+        }
+    
+    def build_prompt(self, ex):
+        choices = ex["choices"]
+        choices_text = choices["text"]
+        choices_label = choices["label"]
+        
+        options_str = "\n".join([f"({label}) {text}" for label, text in zip(choices_label, choices_text)])
+        
+        ARC_PROMPT_TMPL = (
+            "Answer the following multiple-choice question.\n"
+            "Question: {question}\n"
+            "{options}\n"
+        )
+        return ARC_PROMPT_TMPL.format(
+            question=ex['question'],
+            options=options_str
+        )
+    
+    def get_answer_string(self, ex):
+        answer_key = str(ex["answerKey"])
+        choices = ex["choices"]
+        choices_text = choices["text"]
+        choices_label = [str(l) for l in choices["label"]]
+        
+        answer_index = choices_label.index(answer_key)
+        answer_text = choices_text[answer_index]
+        return f"Answer: ({answer_key}) {answer_text}."
+
+    def load_tokenized_dataset(self, tokenizer, max_len: int = 256, return_test: bool = False):
+        def build_tokenized_features(ex):
+            prompt = self.build_prompt(ex)
+            completion = self.get_answer_string(ex)
+            return self._tokenize_prompt_completion(tokenizer, prompt, completion, max_len)
+        return self._map_tokenized_splits(build_tokenized_features, return_test)
+    
+    def load_raw_dataset(self, return_test: bool = False):
+        def build_raw_features(ex):
+            prompt = self.build_prompt(ex)
+            answer_key = str(ex["answerKey"])
+            completion = self.get_answer_string(ex)
+            return self._build_raw_example(prompt, completion, answer_key)
+        
+        return self._map_raw_splits(build_raw_features, return_test)
+
+    def evaluate(self, output, label):
+        s = output.strip().upper()
+        answer_key = str(label).strip().upper()
+
+        # Try to extract from "Answer: (C)" or similar
+        m_ans = re.search(r"ANSWER\s*[:\-]?\s*\(?([A-E1-5])\)?", s)
+        if m_ans:
+            return m_ans.group(1).upper() == answer_key
+
+        # Fallback: match any standalone letter/number A-E or 1-5
+        letters = re.findall(r"\b([A-E1-5])\b", s)
+        if len(letters) == 1:
+            return letters[0] == answer_key
+
+        return False
+
+    def load_tokenized_dataset_chat(self, tokenizer, max_len=256, return_test=False):
+        def build_tokenized_features(ex):
+            prompt = self.build_prompt(ex)
+            completion = self.get_answer_string(ex)
+
+            base_msgs = [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user",   "content": prompt},
+            ]
+
+            return self._tokenize_chat_completion(tokenizer, base_msgs, completion, max_len)
+
+        return self._map_tokenized_splits(build_tokenized_features, return_test)
+
+    def load_raw_dataset_chat(self, tokenizer, return_test=False):
+        def build_raw_features(ex):
+            prompt = self.build_prompt(ex)
+            completion = self.get_answer_string(ex)
+
+            base_msgs = [
+                {"role": "system", "content": [{"type": "text", "text": "You are a helpful assistant."}]},
+                {"role": "user",   "content": [{"type": "text", "text": prompt}]},
+            ]
+
+            prefix = tokenizer.apply_chat_template(
+                base_msgs, tokenize=False, add_generation_prompt=True
+            )
+
+            return [prefix, completion, str(ex["answerKey"])]
+
+        return self._map_raw_chat_splits(build_raw_features, return_test)
+
+class AQuA(BaseDatasetLoader):
+    def __init__(self, mode="eval"):
+        super().__init__(mode)
+        ds = load_dataset("deepmind/aqua_rat", "raw")
+        self.raw_dict = {
+            "train": ds["train"],
+            "validation": ds["validation"],
+            "test": ds["test"],
+        }
+
+    def build_prompt(self, ex):
+        options_str = "\n".join(ex["options"])
+        AQUA_PROMPT_TMPL = (
+            "Answer the following multiple-choice math question.\n"
+            "Question: {question}\n"
+            "{options}\n"
+        )
+        return AQUA_PROMPT_TMPL.format(
+            question=ex["question"],
+            options=options_str,
+        )
+
+    def get_answer_string(self, ex):
+        answer_key = str(ex["correct"])
+        rationale = ex["rationale"].strip()
+        return f"{rationale}\nAnswer: {answer_key}."
+
+    def load_tokenized_dataset(self, tokenizer, max_len=512, return_test=False):
+        def build_tokenized_features(ex):
+            prompt = self.build_prompt(ex)
+            completion = self.get_answer_string(ex)
+            return self._tokenize_prompt_completion(tokenizer, prompt, completion, max_len)
+        return self._map_tokenized_splits(build_tokenized_features, return_test)
+
+    def load_raw_dataset(self, return_test=False):
+        def build_raw_features(ex):
+            prompt = self.build_prompt(ex)
+            answer_key = str(ex["correct"])
+            completion = self.get_answer_string(ex)
+            return self._build_raw_example(prompt, completion, answer_key)
+        return self._map_raw_splits(build_raw_features, return_test)
+
+    def evaluate(self, output, label):
+        s = output.strip().upper()
+        answer_key = str(label).strip().upper()
+
+        m_ans = re.search(r"ANSWER\s*[:\-]?\s*\(?([A-E])\)?", s)
+        if m_ans:
+            return m_ans.group(1) == answer_key
+
+        # Fallback: last standalone letter A-E
+        letters = re.findall(r"\b([A-E])\b", s)
+        if letters:
+            return letters[-1] == answer_key
+
+        return False
+
+    def load_tokenized_dataset_chat(self, tokenizer, max_len=512, return_test=False):
+        def build_tokenized_features(ex):
+            prompt = self.build_prompt(ex)
+            completion = self.get_answer_string(ex)
+            base_msgs = [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user",   "content": prompt},
+            ]
+            return self._tokenize_chat_completion(tokenizer, base_msgs, completion, max_len)
+        return self._map_tokenized_splits(build_tokenized_features, return_test)
+
+    def load_raw_dataset_chat(self, tokenizer, return_test=False):
+        def build_raw_features(ex):
+            prompt = self.build_prompt(ex)
+            completion = self.get_answer_string(ex)
+            base_msgs = [
+                {"role": "system", "content": [{"type": "text", "text": "You are a helpful assistant."}]},
+                {"role": "user",   "content": [{"type": "text", "text": prompt}]},
+            ]
+            prefix = tokenizer.apply_chat_template(
+                base_msgs, tokenize=False, add_generation_prompt=True
+            )
+            return [prefix, completion, str(ex["correct"])]
+        return self._map_raw_chat_splits(build_raw_features, return_test)
