@@ -2,7 +2,9 @@ import sys
 sys.path.append('../')
 from utils import *
 from scripts import evaluate_model
-from approx_oracle import FixedVectorSteerer, AdapterSteerer
+
+sys.path.append('./')
+from joint_steerer import AdapterSteerer
 
 from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments, TrainerCallback
 from peft import LoraConfig, TaskType, get_peft_model
@@ -121,11 +123,11 @@ if __name__ == "__main__":
     parser.add_argument("--scheduler", type=str, default="cosine")
     parser.add_argument("--weight-decay", type=float, default=0.0)
     parser.add_argument("--epochs", type=int, default=None)
+    parser.add_argument("--bs", type=int, default=8)
 
     parser.add_argument("--save-model", action="store_true")
     parser.add_argument("--test-only", action="store_true")
     parser.add_argument("--submodules", action="store_true")
-    parser.add_argument("--bidirectional", action="store_true")
 
     parser.add_argument("--lora-rank", type=int, default=8, help="Rank (r) for LoRA adapters.")
     parser.add_argument("--adapter-rank", type=int, default=8, help="Rank of adapter modules (if using adapters)")
@@ -201,7 +203,7 @@ if __name__ == "__main__":
         # overwrite_output_dir=True,
         learning_rate=args.lr,
         num_train_epochs=train_epochs,
-        per_device_train_batch_size=1,       # Lower batch size to reduce memory usage.
+        per_device_train_batch_size=args.bs,       # Lower batch size to reduce memory usage.
         gradient_accumulation_steps=2,         # Accumulate gradients to effectively use a batch size of 2.
         per_device_eval_batch_size=1,
         save_total_limit=1,
