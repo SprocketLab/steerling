@@ -1,7 +1,7 @@
 import sys
 sys.path.append('../')
 from utils import *
-from scripts import evaluate_model
+from inference import evaluate_model
 
 sys.path.append('./')
 from joint_steerer import AdapterSteerer
@@ -138,7 +138,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--orthogonal-freq",
         type=str,
-        default="step",
+        default="100",
         help="step, epoch, init, or integer steps (e.g. 1000)",
     )
 
@@ -246,7 +246,7 @@ if __name__ == "__main__":
     project_name = f'orth_outputs/{dataset_name}/{model_name.split("/")[-1]}_dual_lora{args.lora_rank}_adapter{args.adapter_rank}_lr{args.lora_lr}_{s}'
 
     if args.save_model:
-        final_dir = f'FIXED_orth_model_{dataset_name}/{model_name.split("/")[-1]}_dual_lora{args.lora_rank}_adapter{args.adapter_rank}_lr{args.lr}_epochs{train_epochs}'
+        final_dir = f'orth_model_{dataset_name}/{model_name.split("/")[-1]}_dual_lora{args.lora_rank}_adapter{args.adapter_rank}_lr{args.lr}_epochs{train_epochs}'
         # Save LoRA-wrapped base model and adapter steerer weights separately.
         trainer.model.base_model.save_pretrained(final_dir)
         adapter_path = os.path.join(final_dir, "adapter_steerer.pt")
