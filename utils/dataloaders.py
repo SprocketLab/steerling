@@ -1499,3 +1499,55 @@ class AQuA(BaseDatasetLoader):
             )
             return [prefix, completion, str(ex["correct"])]
         return self._map_raw_chat_splits(build_raw_features, return_test)
+
+GRPO_SYSTEM_PROMPT = """\
+You are a helpful AI Assistant that provides well-reasoned and detailed responses. \
+You first think about the reasoning process as an internal monologue and then provide the user with the answer. \
+Respond in the following format: <think>\n...\n</think>\n<answer>\n...\n</answer>"""
+
+
+class GSM8K_GRPO(GSM8K):
+    """GSM8K formatted for GRPO training: each example has a prompt and solution column."""
+
+    def __init__(self, mode="train", system_prompt=GRPO_SYSTEM_PROMPT):
+        super().__init__(mode)
+        self.system_prompt = system_prompt
+
+    def load_grpo_dataset(self, tokenizer, return_test=False):
+        def build_grpo_features(ex):
+            question = ex["question"]
+            answer_text = ex["answer"]
+            _, answer_val = answer_text.split("####")
+            answer_val = answer_val.strip()
+
+            prompt_messages = [
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": question},
+            ]
+            rendered = tokenizer.apply_chat_template(
+                prompt_messages, tokenize=False, add_generation_prompt=True
+            )
+            return {"prompt": rendered, "solution": answer_val}
+
+        return self._map_tokenized_splits(build_grpo_features, return_test)
+
+    def load_raw_dataset_chat(self, tokenizer, return_test=False):
+        def build_raw_features(ex):
+            question = ex["question"]
+            _, answer_val = ex["answer"].split("####")
+            answer_val = answer_val.strip()
+
+            prompt_messages = [
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": question},
+            ]
+            rendered = tokenizer.apply_chat_template(
+                prompt_messages, tokenize=False, add_generation_prompt=True
+            )
+            return [rendered, "", float(answer_val.replace(",", ""))]
+
+        return self._map_raw_chat_splits(build_raw_features, return_test)
+
+    def evaluate(self, output, label):
+        from tina.rewards import accuracy_reward
+        return accuracy_reward([output], [label])

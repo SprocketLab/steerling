@@ -10,8 +10,10 @@ from custom_trainer import StepwiseTrainer
 
 import sys
 sys.path.append('./')
-from utils import *
 from inference import evaluate_model
+from trl import GRPOConfig, GRPOTrainer
+from tina.rewards import accuracy_reward, format_reward
+from utils import *
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -31,11 +33,18 @@ if __name__ == "__main__":
     parser.add_argument("--do-eval", action ='store_true', help="If set, do eval in the same script after training, and do not save model")
     parser.add_argument("--test-only", action ='store_true', help="If set, only eval on test set")
 
+    # GRPO args
+    parser.add_argument("--num-generations", type=int, default=6)
+    parser.add_argument("--max-prompt-length", type=int, default=512)
+    parser.add_argument("--max-completion-length", type=int, default=1024)
+    parser.add_argument("--system-prompt", type=str, default=None)
+
     args = parser.parse_args()
     dataset_name = args.dataset_name
     default_epochs = epochs_per_dataset.get(dataset_name, 1)
     train_epochs = args.epochs if args.epochs is not None else default_epochs
     dataset_class = dataset_dict[dataset_name]
+    is_grpo = hasattr(dataset_class, 'load_grpo_dataset')
 
     print("=" * 20)
     print(f"Model Name: {args.model_name}")
@@ -87,7 +96,6 @@ if __name__ == "__main__":
     print("Percentage trainable params:", sum(p.numel() for p in steered_model.parameters() if p.requires_grad)/sum(p.numel() for p in base_model.parameters())*100, "%")
 
     # --- Dataset & preprocessing (toy example) ---
-
     if args.no_adapter:
         project_str = "fixedvec_all" if not args.intervene_last else "fixedvec_last"
         project_str = f"{project_str}_linear" if args.linear else f"{project_str}_nonlinear"
@@ -97,53 +105,91 @@ if __name__ == "__main__":
         project_str = f"{project_str}_linear" if args.linear else f"{project_str}_nonlinear_{args.nonlinearity}"
         project_name = f"{dataset_name}_model/{model_name.split('/')[-1]}_{project_str}/lr{args.lr}_bs{args.bs}_ep{train_epochs}_warmup{args.warmup_ratio}_wd{args.weight_decay}_rank{args.adapter_rank}"
 
-    if "gemma" in model_name.lower():
-        train_dataset, eval_dataset = dataset_class(mode="train").load_tokenized_dataset_chat(tokenizer=tokenizer)
-    else:
-        train_dataset, eval_dataset = dataset_class(mode="train").load_tokenized_dataset(tokenizer=tokenizer)
+    if is_grpo:
+        dataset_obj = dataset_class(mode="train")
+        if args.system_prompt:
+            dataset_obj.system_prompt = args.system_prompt
+        train_dataset, _ = dataset_obj.load_grpo_dataset(tokenizer)
 
-    training_args = TrainingArguments(
-        output_dir=f"./{project_name}",
-        per_device_train_batch_size=args.bs,
-        num_train_epochs=train_epochs,
-        gradient_accumulation_steps=2,
-        learning_rate=args.lr,
-        lr_scheduler_type="linear",
-        warmup_ratio=args.warmup_ratio,
-        weight_decay=args.weight_decay,
-        remove_unused_columns=False,
-        # Ensure training loss gets logged to wandb frequently for short runs
-        logging_strategy="steps",
-        logging_steps=10,
-        report_to=["wandb"],
-        # Tied weights (embed_tokens/lm_head) trip safetensors; save as torch instead
-        save_safetensors=False,
-        save_total_limit=1,
-        save_strategy="no",         
-        group_by_length=True,
-    )
+        grpo_config = GRPOConfig(
+            output_dir=f"./{project_name}",
+            overwrite_output_dir=True,
+            num_train_epochs=train_epochs,
+            per_device_train_batch_size=args.bs,
+            gradient_accumulation_steps=4,
+            gradient_checkpointing=False,
+            save_total_limit=1,
+            logging_steps=1,
+            logging_first_step=True,
+            report_to=["wandb"],
+            remove_unused_columns=False,
+            bf16=True,
+            learning_rate=args.lr,
+            lr_scheduler_type="cosine_with_min_lr",
+            lr_scheduler_kwargs={"min_lr_rate": 0.1},
+            max_prompt_length=args.max_prompt_length,
+            max_completion_length=args.max_completion_length,
+            num_generations=args.num_generations,
+            group_by_length=True,
+            save_strategy="no",
+            reward_weights=[1.0, 2.0],
+            use_vllm=False,
+            max_steps=1500 if train_epochs else 0,
+            seed=42,
+        )
 
-    if args.intervene_last:
-        trainer = StepwiseTrainer(
+        trainer = GRPOTrainer(
             model=steered_model,
-            args=training_args,
+            args=grpo_config,
             train_dataset=train_dataset,
+            reward_funcs=[format_reward, accuracy_reward],
         )
     else:
-        trainer = Trainer(
-            model=steered_model,
-            args=training_args,
-            train_dataset=train_dataset,
+        if "gemma" in model_name.lower():
+            train_dataset, eval_dataset = dataset_class(mode="train").load_tokenized_dataset_chat(tokenizer=tokenizer)
+        else:
+            train_dataset, eval_dataset = dataset_class(mode="train").load_tokenized_dataset(tokenizer=tokenizer)
+
+        training_args = TrainingArguments(
+            output_dir=f"./{project_name}",
+            per_device_train_batch_size=args.bs,
+            num_train_epochs=train_epochs,
+            gradient_accumulation_steps=2,
+            learning_rate=args.lr,
+            lr_scheduler_type="linear",
+            warmup_ratio=args.warmup_ratio,
+            weight_decay=args.weight_decay,
+            remove_unused_columns=False,
+            logging_strategy="steps",
+            logging_steps=10,
+            report_to=["wandb"],
+            # Tied weights (embed_tokens/lm_head) trip safetensors; save as torch instead
+            save_safetensors=False,
+            save_total_limit=1,
+            save_strategy="no",
+            group_by_length=True,
         )
-        
+
+        if args.intervene_last:
+            trainer = StepwiseTrainer(
+                model=steered_model,
+                args=training_args,
+                train_dataset=train_dataset,
+            )
+        else:
+            trainer = Trainer(
+                model=steered_model,
+                args=training_args,
+                train_dataset=train_dataset,
+            )
 
     trainer.train()
     if not args.do_eval:
         trainer.save_model(project_name)
     else:
         dataset_obj = dataset_class(mode="eval")
-        if "gemma" in model_name.lower():
-            datasets = dataset_obj.load_raw_dataset_chat(tokenizer, return_test=True) 
+        if "gemma" in model_name.lower() or is_grpo:
+            datasets = dataset_obj.load_raw_dataset_chat(tokenizer, return_test=True)
         else:
             datasets = dataset_obj.load_raw_dataset(return_test=True)
         validation_dataset = datasets["validation"]

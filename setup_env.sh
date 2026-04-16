@@ -27,13 +27,17 @@ TORCH_CUDA_CHANNEL="${TORCH_CUDA_CHANNEL:-https://download.pytorch.org/whl/cu121
   "torchaudio>=2.2"
 
 "${CONDA_BIN}" run -n "${ENV_NAME}" pip install \
-  "transformers>=4.40" \
+  "transformers>=4.40,<5.0.0" \
   "accelerate>=0.26" \
   "datasets>=2.19" \
   "numpy>=1.26" \
   "tqdm>=4.66" \
   "wandb>=0.16" \
-  "safetensors>=0.4"
+  "safetensors>=0.4" \
+  "math_verify==0.9.0" \
+  "latex2sympy2_extended[antlr4_13_2]==1.11.0" \
+  "peft==0.11.1" \
+  "trl==0.25.1"
 
 echo
 echo "Environment ready."

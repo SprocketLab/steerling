@@ -180,6 +180,17 @@ class AdapterSteerer(nn.Module):
                 )
                 self._hooks.append(h)
 
+        # hack: make grpo trainer happy
+        self.warnings_issued = {}
+        self.is_gradient_checkpointing = None
+
+    # hack: dummy functions for GRPO
+    def add_model_tags(*args, **kwargs):
+        pass
+
+    def gradient_checkpointing_enable(*args, **kwargs):
+        pass
+
     # ---------- helpers: how to apply adapters over sequence ----------
 
     def _apply_adapter_last(self, tensor, adapter: nn.Module):

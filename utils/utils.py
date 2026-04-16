@@ -20,8 +20,8 @@ dataset_dict = {
     "SVAMP": SVAMP,
     "MAWPS": MAWPS,
     "ARC": ARC_Challenge,
-    "AQuA": AQuA
-
+    "AQuA": AQuA,
+    "GSM8K-GRPO": GSM8K_GRPO,
 }
 
 epochs_per_dataset = {
@@ -30,7 +30,8 @@ epochs_per_dataset = {
     "ListOps": 1,
     "GSM8K": 3,
     "MAWPS": 3,
-    "AQuA": 1
+    "AQuA": 1,
+    "GSM8K-GRPO": 1,
 }
 
 max_new_tokens_per_dataset = {
@@ -39,7 +40,8 @@ max_new_tokens_per_dataset = {
     "ListOps": 10,
     "GSM8K": 100,
     "MAWPS": 20,
-    "AQuA": 256
+    "AQuA": 256,
+    "GSM8K-GRPO": 1024,
 }
 
 
